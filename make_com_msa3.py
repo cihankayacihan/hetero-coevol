@@ -1,4 +1,6 @@
 from prody import *
+from pylab import *
+ion()
 from Bio import pairwise2
 from Bio import PDB
 from Bio.Align.Applications import ClustalwCommandline
@@ -39,6 +41,7 @@ def coevol(line):
 	unbound_pro2 = entry[2].split("_")[0]
 	unbound_pro2_c = entry[2].split("_")[1][:-1]
 
+	pdb = parsePDB(bound_pro)
 	header = parsePDBHeader(bound_pro, 'polymers')
 	bp_chid = []
 	for polymer in header:
@@ -175,7 +178,7 @@ def coevol(line):
 	total_seq2 = total_seq
 
 	mergedMSA = specMergeMSA(total_msa1, total_msa2)
-	finalMergedMSA = refineMSA(mergedMSA, colocc=0.9)
+	finalMergedMSA = refineMSA(mergedMSA, colocc=0.8)
 	writeMSA(bound_pro + '.fasta', finalMergedMSA)
 
 	merged_seq = total_seq1 + total_seq2
@@ -240,8 +243,56 @@ def coevol(line):
 		for j in range(len(mapping_on_str[i])):
 			str_idx[i].append(res_idx_str[i][mapping_on_str[i][j]])
 
+	count = 0
+	total_length = 0
+	gate = 0
+	coords = np.array([])
+	for i in range(len(bp1_chid_idx)):
+		if gate == 0:
+			if len(str_idx[count])!=0:
+				coords = parsePDB(bound_pro, subset='ca', chain=bp_chid[bp1_chid_idx[i]]).getCoords()[np.array(str_idx[count]),:]
+				total_length += len(coords)
+			count = count + 1
+			if len(coords) != 0:
+				gate = 1
+		else:
+			if len(str_idx[count])!=0:
+				new_coords = parsePDB(bound_pro, subset='ca',chain=bp_chid[bp1_chid_idx[i]]).getCoords()[np.array(str_idx[count]),:]
+				total_length += len(new_coords)
+			count = count + 1
+			if len(coords)!=0 and len(new_coords)!=0:
+				coords = np.concatenate((coords, new_coords), axis=0)
+
+	for i in range(len(bp2_chid_idx)):
+		if len(str_idx[count])!=0:
+			new_coords = parsePDB(bound_pro, subset='ca',chain=bp_chid[bp2_chid_idx[i]]).getCoords()[np.array(str_idx[count]),:]
+			total_length += len(new_coords)
+		count = count + 1
+		if len(coords)!=0 and len(new_coords)!=0:
+			coords = np.concatenate((coords, new_coords), axis=0)
+
+	dist = buildDistMatrix(coords)
+	dist_ini = dist < 8	
+
+	PC = buildPCMatrix(finalRefinedMSA)
+	PC_ranked = calcRankorder(PC)
+
+	result = zeros(8)
+	for z in range(len(thold)):
+		num = int(len(PC_ranked[0])*thold[z])
+		for i in range(num):
+			result[z]+=dist_ini[PC_ranked[0][i],PC_ranked[1][i]]
+		result[z]/=num
+
+	np.savetxt(bound_pro + '.res', np.array(result))
+
+
 	# TODO get pdb coordinates just for residues that are determined. run coevol and compare
-			 
+f = open('alldata5','r')
+a = Parallel(n_jobs=4)(delayed(coevol)(line) for line in f)
+f.close()
+
+
 	
 	#call(["clustalw -infile=" + bound_pro + "_one.aln -outfile=" + bound_pro + "_final.fasta"], shell=True)
 
