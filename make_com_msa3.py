@@ -12,6 +12,20 @@ import time
 
 thold = [0.001, 0.002, 0.005, 0.01, 0.02, 0.05, 0.1, 0.2]
 
+def group_consecutives(vals, step=1):
+    """Return list of consecutive lists of numbers from vals (number list)."""
+    run = []
+    result = [run]
+    expect = None
+    for v in vals:
+        if (v == expect) or (expect is None):
+            run.append(v)
+        else:
+            run = [v]
+            result.append(run)
+        expect = v + step
+    return result
+
 def coevol(line):
 	result={}
 	entry = line.split("\t")
@@ -181,10 +195,11 @@ def coevol(line):
 	res_idx_str = []
 	res_idx_ali = []
 	for seq in seqs:
-		alignment = pairwise2.align.globalms(seq, seq_from_alignment,5,-1,-10,-1)
+		alignment = pairwise2.align.globalms(seq, seq_from_alignment,5,-20,-5,-1)
 		p1res = []
 		p2res = []
 		count = 0
+		count1 = 0
 		for i in range(0,len(alignment[0][0])):
 				if alignment[0][0][i] == '-':
 					count = count+1
@@ -192,12 +207,41 @@ def coevol(line):
 					count1 = count1 + 1
 				if alignment[0][0][i] != '-' and alignment[0][1][i] != '-':
 					p1res.append(i-count)
-					p2res.append(i)
+					p2res.append(i-count1)
 		res_idx_str.append(p1res)
 		res_idx_ali.append(p2res)
 
+	res_idx_after_ali = []
+	for i in range(len(res_idx_ali)):
+		res_idx_after_ali.append([])
+		groups=group_consecutives(np.array(res_idx_ali[i]))
+		for g in groups:
+			if len(g)>10:
+				res_idx_after_ali[i].append(g)
 
+	res_idx_filtered_ali = []
+	for i in range(len(res_idx_after_ali)-1):
+		for j in range(i+1,len(res_idx_after_ali)):
+			arr1 = np.array(res_idx_after_ali[i])
+			arr2 = np.array(res_idx_after_ali[j])
+			arr1 = np.setdiff1d(arr1, arr2)
+		res_idx_filtered_ali.append(arr1)
+	res_idx_filtered_ali.append(np.setdiff1d(np.array(res_idx_after_ali[j]),np.ones(1)*-1))
 
+	mapping_on_str = []
+	for i in range(len(res_idx_filtered_ali)):
+		mapping_on_str.append([])
+		for j in range(len(res_idx_filtered_ali[i])):
+			mapping_on_str[i].append(res_idx_ali[i].index(res_idx_filtered_ali[i][j])) 
+	
+	str_idx = []
+	for i in range(len(mapping_on_str)):
+		str_idx.append([])
+		for j in range(len(mapping_on_str[i])):
+			str_idx[i].append(res_idx_str[i][mapping_on_str[i][j]])
+
+	# TODO get pdb coordinates just for residues that are determined. run coevol and compare
+			 
 	
 	#call(["clustalw -infile=" + bound_pro + "_one.aln -outfile=" + bound_pro + "_final.fasta"], shell=True)
 
